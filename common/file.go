@@ -14,7 +14,7 @@ func GetCurrentDirectory() string {
 }
 
 func getTestDirectory() string {
-	return "G:/data/2020-01-16/test1/wordutil2020-01-191"
+	return "G:/data/2020-01-16/test4/wordutil2020-01-191"
 }
 func getCurrentDir() string {
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
