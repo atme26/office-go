@@ -1,5 +1,5 @@
 // Copyright 2017 FoxyUtils ehf. All rights reserved.
-package main
+package bak
 
 import (
 	"bufio"
@@ -9,12 +9,12 @@ import (
 	"github.com/unidoc/unioffice/spreadsheet"
 	"io/ioutil"
 	"log"
+	"office-go/common"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-	"wordutil/des"
 )
 
 const path_src = "src"
@@ -129,7 +129,7 @@ func authCheck() (bool, error) {
 		if err != nil {
 			continue
 		}
-		org, err := des.DesDecrypt(decodeBytes, key)
+		org, err := common.DesDecrypt(decodeBytes, key)
 		if err != nil {
 			continue
 		}

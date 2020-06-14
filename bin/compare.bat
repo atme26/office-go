@@ -1,0 +1,1 @@
+go build -o compare.exe ../compare/main.go

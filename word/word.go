@@ -3,30 +3,24 @@ package main
 
 import (
 	"bufio"
-	"encoding/base64"
 	"fmt"
 	"github.com/unidoc/unioffice/document"
 	"github.com/unidoc/unioffice/spreadsheet"
-	"io/ioutil"
-	"log"
+	"office-go/common"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
-	"wordutil/des"
 )
 
 const path_src = "src"
 const path_target = "target"
 const path_result = "result"
 
-var logger *log.Logger
-var logFile *os.File
 var checkWork bool
 var scanMap map[string]scanDataV
 
 var tableMap map[string]tableDataV
+
+var currentDir string
 
 type scanDataV struct {
 	row      int
@@ -42,173 +36,76 @@ type tableDataV struct {
 }
 
 func main() {
-	b, err := authCheck()
+
+	b, _ := common.AuthCheck()
 	if !b {
 		return
 	}
 
-	logFile, _ = os.OpenFile("dataReport.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 666)
-	logger = log.New(logFile, "", log.LstdFlags)
-	tolog("=============================")
-	tolog("开始 " + getCurrentDirectory())
-
-	exists, err := PathExists(getCurrentDirectory() + "/" + path_result)
-	if !exists {
-		tolog("生成result目录")
-		_ = os.Mkdir(getCurrentDirectory()+"/"+path_result, os.ModePerm)
-	}
+	currentDir = common.GetCurrentDirectory()
+	tolog("开始 " + currentDir)
+	_, _ = common.PathExists(currentDir+"/"+path_result, true)
 
 	//target
-	tFiles, err := ioutil.ReadDir(getCurrentDirectory() + "/" + path_target)
-	if err != nil {
-		tolog(err)
+	docfile, _ := common.FindFile(currentDir+"/"+path_target, "DOCX")
+	if docfile == nil {
+		tolog("target目录没有找到docx文件！")
+		return
 	}
-	var tfile string
-
-	for _, file := range tFiles {
-		if file.IsDir() {
-			tolog(file.Name() + " 是目录，跳过不处理！")
-			continue
-		}
-
-		if strings.HasSuffix(strings.ToUpper(file.Name()), "DOCX") {
-			tfile = file.Name()
-			tolog("加载目标表... " + file.Name())
-			break
-		}
-	}
-
 	// 读取excel列表
-	files, err := ioutil.ReadDir(getCurrentDirectory() + "/" + path_src)
-	if err != nil {
-		tolog(err)
+	excelfiles, _ := common.FindFiles(currentDir+"/"+path_src, "XLSX")
+	if excelfiles == nil || len(excelfiles) == 0 {
+		tolog("src目录没有找到xlsx文件！")
+		return
 	}
-	//src
-	scanMap = make(map[string]scanDataV)
 
+	scanMap = make(map[string]scanDataV)
 	tableMap = make(map[string]tableDataV)
 	checkWork = true
-	for _, file := range files {
-		if file.IsDir() {
-			tolog(file.Name() + " 是目录，跳过不处理！")
-			continue
-		}
 
-		if strings.HasSuffix(strings.ToUpper(file.Name()), "XLSX") {
-			tolog("正在读取... " + file.Name())
-			readExcel(file)
-			continue
-		}
-		tolog(file.Name() + " 格式不匹配，跳过不处理！")
+	for _, file := range excelfiles {
+		readExcel(file)
 	}
 
 	if scanMap == nil {
+		tolog("src中没有找到需要处理的数据！")
 		return
 	}
-	doc, err := document.Open(getCurrentDirectory() + "/" + path_target + "/" + tfile)
-	matchWord(doc)
-	if !checkWork {
-		tolog(" 校验未通过，请修改完再重试！")
 
-	} else {
-		err := writeToWord(doc)
-		if err != nil {
-			tolog(err)
-		}
-		_ = doc.SaveToFile(getCurrentDirectory() + "/" + path_result + "/temp_0_" + tfile)
+	doc := matchWord(docfile)
 
-		_ = cleanWord(doc)
-		_ = doc.SaveToFile(getCurrentDirectory() + "/" + path_result + "/temp_1_" + tfile)
-
+	err := writeToWord(doc)
+	if err != nil {
+		tolog(err)
 	}
+	_ = doc.SaveToFile(currentDir + "/" + path_result + "/temp_0_" + docfile.Name())
+
+	_ = cleanWord(doc)
+	_ = doc.SaveToFile(currentDir + "/" + path_result + "/temp_1_" + docfile.Name())
 
 	//写入日志文件
+	if !checkWork {
+		tolog(" word中有校验未通过，请修改完再重试！")
+	}
 	tolog("结束 ")
-	tolog("=============================")
-	tolog("")
-	_ = logFile.Close()
+	_ = common.LogClose
 	fmt.Printf("取数结束，按回车关闭此窗口... ")
 	inputReader := bufio.NewReader(os.Stdin)
 	_, _ = inputReader.ReadString('\n')
 
 }
 
-func getTestDirectory() string {
-	return "G:/data/2020-01-16/test1/wordutil2020-01-191"
-}
-func getCurrentDir() string {
-	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	if err != nil {
-	}
-	return strings.Replace(dir, "\\", "/", -1)
-}
-
-func authCheck() (bool, error) {
-	for {
-		fmt.Printf("Please enter the password: ")
-		inputReader := bufio.NewReader(os.Stdin)
-		input, err := inputReader.ReadString('\n')
-		if err != nil {
-			return false, err
-		}
-		str := strings.Replace(input, "\n", "", -1)
-
-		if "exit" == str || "stop" == str {
-			return false, nil
-		}
-
-		key := []byte("88991128")
-		decodeBytes, err := base64.StdEncoding.DecodeString(str)
-		if err != nil {
-			continue
-		}
-		org, err := des.DesDecrypt(decodeBytes, key)
-		if err != nil {
-			continue
-		}
-		pwd := string(org)
-		pwds := strings.Split(pwd, "-")
-		if len(pwds) > 1 && "yoyyu" == pwds[0] {
-
-			currentTime := time.Now().Local().Unix()
-			b, ts := isInt(pwds[1])
-			if !b {
-				return false, nil
-			}
-
-			if currentTime < ts {
-				return true, nil
-			}
-		}
-		fmt.Println("Permission denied, please try again.")
-	}
-}
-
 func readExcel(file os.FileInfo) {
-	wb, err := spreadsheet.Open(getCurrentDirectory() + "/" + path_src + "/" + file.Name())
+	wb, err := spreadsheet.Open(currentDir + "/" + path_src + "/" + file.Name())
 	if err != nil {
-		logger.Println(err)
+		tolog(err)
 		return
 	}
 
 	var dataV scanDataV
 	sheets := wb.Sheets()
-	prefix := ""
 	for _, sheet := range sheets {
-		sheetName := sheet.Name()
-		sheetNameTags := strings.Split(sheetName, "-")
-		if len(sheetNameTags) > 1 {
-			is, _ := isInt(sheetNameTags[0])
-			if !is {
-				tolog(sheetName + "不符合规则，跳过")
-				continue
-			}
-			tolog("读取 " + sheetName)
-			prefix = sheetNameTags[0]
-		} else {
-			tolog(sheetName + "不符合规则，跳过")
-			continue
-		}
+
 		scan := false
 		startCol := 0
 		startRow := 0
@@ -227,7 +124,7 @@ func readExcel(file os.FileInfo) {
 					startCol = c
 					startRow = r
 					dataV = scanDataV{}
-					dataV.startNum = starts[1]
+					dataV.startNum = starts[len(starts)-1]
 					continue
 				}
 
@@ -242,7 +139,7 @@ func readExcel(file os.FileInfo) {
 					//tag := prefix + "-start-" + dataV.startNum
 
 					// 将已经记录的数据进行截取。得到实际的数据区间
-					scanMap[prefix+"-start-"+dataV.startNum] = scanDataV{
+					scanMap["start-"+dataV.startNum] = scanDataV{
 						startNum: dataV.startNum,
 						data:     dataV.data,
 						row:      r - startRow + 1,
@@ -274,8 +171,8 @@ func readExcel(file os.FileInfo) {
 	}
 }
 
-func matchWord(doc *document.Document) {
-
+func matchWord(file os.FileInfo) (doc *document.Document) {
+	doc, _ = document.Open(currentDir + "/" + path_target + "/" + file.Name())
 	tables := doc.Tables()
 	for t, table := range tables {
 		startCol := 0
@@ -296,7 +193,7 @@ func matchWord(doc *document.Document) {
 				if scan {
 					//tolog(" 当前值 " + text)
 				}
-				if strings.Contains(text, "-start-") {
+				if strings.Contains(text, "start-") {
 
 					if scan {
 						tolog(" 预期应该查找值 " + endText + "， 实际匹配值 " + text)
@@ -304,19 +201,19 @@ func matchWord(doc *document.Document) {
 					}
 
 					starts := strings.Split(text, "-")
-					if len(starts) > 2 {
+					if len(starts) > 1 {
 						scan = true
 					}
-					startText = text
-					tolog("开始匹配 " + startText)
-					endText = starts[0] + "-end-" + starts[2]
+					startText = starts[len(starts)-2] + "-" + starts[len(starts)-1]
+					tolog("开始匹配 " + text)
+					endText = "end-" + starts[len(starts)-1]
 					startRow = r
 					startCol = c
 
 					break
 				}
 
-				if strings.Contains(text, "-end-") {
+				if strings.Contains(text, "end-") {
 					if !scan {
 						tolog(" 忽略值 " + text)
 					}
@@ -337,8 +234,7 @@ func matchWord(doc *document.Document) {
 								tableNo:  t,
 							}
 						} else {
-							fmt.Printf("匹配失败 %s , excel row %d , excel col %d , word row %d , word col %d\n", text, dataV.row, dataV.col, rs, cs)
-							logger.Printf("匹配失败 %s , excel row %d , excel col %d , word row %d , word col %d\n", text, dataV.row, dataV.col, rs, cs)
+							common.LogPrintf("匹配失败 %s , excel row %d , excel col %d , word row %d , word col %d\n", text, dataV.row, dataV.col, rs, cs)
 							checkWork = false
 						}
 
@@ -352,6 +248,7 @@ func matchWord(doc *document.Document) {
 
 		}
 	}
+	return doc
 }
 
 func writeToWord(doc *document.Document) error {
@@ -385,8 +282,7 @@ func writeToWord(doc *document.Document) error {
 					if data.data[i-r][j-c] == "" {
 						continue
 					} else {
-						fmt.Printf("excel 位置 %s, row %d , col %d 对应的word单元格可能存在跨列，请检查此单元格所在的行是否需要手动调整 \n", k, i-r, j-c)
-						logger.Printf("excel 位置 %s, row %d , col %d 对应的word单元格可能存在跨列，请检查此单元格所在的行是否需要手动调整 \n", k, i-r, j-c)
+						common.LogPrintf("excel 位置 %s, row %d , col %d 对应的word单元格可能存在跨列，请检查此单元格所在的行是否需要手动调整 \n", k, i-r, j-c)
 						break
 					}
 				}
@@ -471,33 +367,8 @@ func getCellValue(cell document.Cell) string {
 	return v
 }
 
-func isInt(value string) (bool, int64) {
-	n, err := strconv.ParseInt(value, 10, 0)
-	if err != nil {
-		return false, 0
-	}
-	return true, n
-}
-
 func tolog(a ...interface{}) {
-	logger.Println(a)
-	fmt.Println(a)
-}
-func getCurrentDirectory() string {
-	//path := getTestDirectory()
-	path := getCurrentDir()
-	return path
-}
-
-func PathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
+	common.Log(a)
 }
 
 func NumberFormat(str string) string {

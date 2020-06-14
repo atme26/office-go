@@ -1,4 +1,4 @@
-module wordutil
+module office-go
 
 go 1.12
 

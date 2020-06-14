@@ -5,12 +5,11 @@ import (
 	"bufio"
 	"encoding/base64"
 	"fmt"
-	"net"
+	"office-go/common"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"wordutil/des"
 )
 
 // replace github.com/unidoc/unioffice => C:\Users\xiajl\go\src\github.com\unidoc\unioffice
@@ -28,14 +27,14 @@ func main() {
 	if timestamp == 0 {
 		return
 	}
-	whiteMac := [...]string{"54:ee:75:d2:b9:d6", "‎88-B1-11-E7-B2-DD"}
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		panic("Poor soul,here is what you got: " + err.Error())
-	}
+	//whiteMac := [...]string{"54:ee:75:d2:b9:d6", "‎88-B1-11-E7-B2-DD"}
+	//interfaces, err := net.Interfaces()
+	//if err != nil {
+	//	panic("Poor soul,here is what you got: " + err.Error())
+	//}
 
-	match := false
-	for _, inter := range interfaces {
+	//match := false
+	/*for _, inter := range interfaces {
 		if match {
 			break
 		}
@@ -46,16 +45,16 @@ func main() {
 				break
 			}
 		}
-	}
+	}*/
 
-	if !match {
-		fmt.Println("You not in white list")
-	}
+	//if !match {
+	//	fmt.Println("You not in white list")
+	//}
 
 	timeStr := strconv.FormatInt(timestamp, 10)
 	data := []byte("yoyyu-" + timeStr)
 	key := []byte("88991128")
-	pwd, _ := des.DesEncrypt(data, key)
+	pwd, _ := common.DesEncrypt(data, key)
 
 	encodeString := base64.StdEncoding.EncodeToString(pwd)
 

@@ -1,0 +1,1 @@
+go build -o pwd.exe ../pwd/main.go
