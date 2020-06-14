@@ -6,6 +6,7 @@ import (
 	"github.com/unidoc/unioffice/spreadsheet"
 	"office-go/common"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +15,19 @@ var checkWork bool
 const path_src = "src"
 
 var currentDir string
+
+var cols = [26]string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"}
+
+func findCol(col int) string {
+	if col < 26 {
+		return cols[col]
+	}
+	index := col / 26
+	first := cols[index-1]
+	num := col % 26
+	second := cols[num]
+	return first + second
+}
 
 func main() {
 	b, _ := common.AuthCheck()
@@ -46,9 +60,7 @@ func main() {
 			common.Log("读取sheet失败！" + sheet1.Name() + " 未找到！")
 			continue
 		}
-		d1 := getCells(sheet1)
-		d2 := getCells(sheet2)
-		compare(sheet1.Name(), d1, d2)
+		compare1(sheet1, sheet2)
 	}
 
 	//写入日志文件
@@ -62,38 +74,20 @@ func main() {
 	_, _ = inputReader.ReadString('\n')
 }
 
-func compare(sheet string, strings1 [1000][100]string, strings2 [1000][100]string) {
+func compare1(sheet1 spreadsheet.Sheet, sheet2 spreadsheet.Sheet) {
 	for i := 0; i < 1000; i++ {
 		for j := 0; j < 100; j++ {
-			if len(strings1[i][j]) == 0 && len(strings2[i][j]) == 0 {
+			col := findCol(j)
+			row := strconv.Itoa(i + 1)
+			cell1 := sheet1.Cell(col + row).GetString()
+			cell2 := sheet2.Cell(col + row).GetString()
+			if len(cell1) == 0 && len(cell2) == 0 {
 				continue
 			}
-			if strings.Compare(strings1[i][j], strings2[i][j]) != 0 {
+			if strings.Compare(cell1, cell2) != 0 {
 				checkWork = true
-				common.LogPrintf("匹配失败 %s , src %s, target %s  row %d ,  col %d\n", sheet, strings1[i][j], strings2[i][j], i, j)
+				common.LogPrintf("匹配失败 %s , src %s, target %s ,  cell %s\n", sheet1.Name(), cell1, cell2, col+row)
 			}
 		}
 	}
-}
-
-func getCells(sheet spreadsheet.Sheet) [1000][100]string {
-	rows := sheet.Rows()
-	var d1 [1000][100]string
-	for r, row := range rows {
-		if r > 999 {
-			break
-		}
-		cells := row.Cells()
-		for c, cell := range cells {
-			if c > 99 {
-				break
-			}
-			if cell.IsEmpty() {
-				d1[r][c] = ""
-			} else {
-				d1[r][c] = cell.GetString()
-			}
-		}
-	}
-	return d1
 }
